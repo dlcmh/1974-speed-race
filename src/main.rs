@@ -401,6 +401,7 @@ impl Game {
         // (not trucks) periodically cut toward the player's lane.
         let py = Self::PLAYER_Y as f32;
         let diff = fmin(0.30, self.score as f32 / 50_000.0); // ramps with score
+        let prev: Vec<(f32, f32)> = self.rivals.iter().map(|r| (r.x, r.y)).collect();
         for r in self.rivals.iter_mut() {
             r.y += (v * (1.0 - r.speed)) * dt;
             if !r.truck && r.y > -10.0 && r.y < py - 20.0 {
@@ -425,11 +426,30 @@ impl Game {
                 .x
                 .clamp((ROAD_X0 + 4) as f32, (ROAD_X1 - 4 - 16) as f32);
         }
+        // Polite traffic: nobody drives into anybody. A rival whose move
+        // landed it inside another one is put back where it was and drops
+        // its lane cut (eagerness denied).
+        let half_w = 16.0; // sprite width
+        let body_h = |r: &Rival| -> f32 { if r.truck { 17.0 } else { 15.0 } };
+        for i in 0..self.rivals.len() {
+            let overlaps = (0..self.rivals.len()).any(|j| {
+                i != j
+                    && (self.rivals[i].x - self.rivals[j].x).abs() < half_w
+                    && (self.rivals[i].y - self.rivals[j].y).abs()
+                        < body_h(&self.rivals[i]).max(body_h(&self.rivals[j]))
+            });
+            if overlaps {
+                let (ox, oy) = prev[i];
+                self.rivals[i].x = ox;
+                self.rivals[i].y = oy;
+                self.rivals[i].cut = 0.0;
+            }
+        }
         // Traffic AI: match speed of the vehicle just ahead (near lane).
         for i in 0..self.rivals.len() {
             for j in 0..self.rivals.len() {
                 if i != j
-                    && (self.rivals[j].x - self.rivals[i].x).abs() < 14.0
+                    && (self.rivals[j].x - self.rivals[i].x).abs() < half_w
                     && self.rivals[j].y < self.rivals[i].y
                     && self.rivals[i].y - self.rivals[j].y < 90.0
                     && self.rivals[i].speed > self.rivals[j].speed
@@ -745,6 +765,30 @@ mod tests {
                     last, f
                 );
                 last = g.score;
+            }
+        }
+    }
+
+    /// Rivals must never overlap each other, however eager they get.
+    #[test]
+    fn rivals_never_overlap() {
+        let mut g = Game::new(0);
+        let body_h = |r: &Rival| -> f32 { if r.truck { 17.0 } else { 15.0 } };
+        for f in 0..36_000 {
+            g.time_left = GAME_SECONDS;
+            g.step(false, false, true, false, 1.0 / 60.0);
+            g.finished = false;
+            for i in 0..g.rivals.len() {
+                for j in (i + 1)..g.rivals.len() {
+                    let (a, b) = (&g.rivals[i], &g.rivals[j]);
+                    let bad = (a.x - b.x).abs() < 15.5
+                        && (a.y - b.y).abs() < body_h(a).max(body_h(b));
+                    assert!(
+                        !bad,
+                        "rivals overlap at frame {}: ({:.1},{:.1}) vs ({:.1},{:.1})",
+                        f, a.x, a.y, b.x, b.y
+                    );
+                }
             }
         }
     }
