@@ -14,7 +14,6 @@
 
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 use std::cmp::max;
-use std::cmp::min;
 
 // ---------------------------------------------------------------------------
 // Screen: native 224x256 (classic vertical arcade raster), scaled 2x by minifb
