@@ -41,7 +41,7 @@ const GAME_SECONDS: f32 = 90.0;
 
 /// Deterministic pseudo-random in 0..1 (no RNG dependency).
 fn hash(n: f32) -> f32 {
-    (n.sin() * 43758.5453).fract().abs()
+    (n.sin() * 43_758.547).fract().abs()
 }
 
 #[inline]
@@ -103,10 +103,10 @@ impl Screen {
             } else {
                 GREEN_BAND
             };
-            let r = (band >> 16) as u32;
-            let g = (band >> 8) as u32;
-            let b = band as u32;
-            let dim = |c: u32| (((c * 11) / 16) << 0) & 0xFF;
+            let r = band >> 16;
+            let g = band >> 8;
+            let b = band;
+            let dim = |c: u32| ((c * 11) / 16) & 0xFF;
             let dimmed = (dim(r) << 16) | (dim(g) << 8) | dim(b);
             for p in self.px[y * W..(y + 1) * W].iter_mut() {
                 if *p == BLACK || *p == WHITE {
@@ -430,19 +430,22 @@ impl Game {
         // its lane cut (eagerness denied).
         let half_w = 16.0; // sprite width
         let body_h = |r: &Rival| -> f32 { if r.truck { 17.0 } else { 15.0 } };
-        for i in 0..self.rivals.len() {
-            let overlaps = (0..self.rivals.len()).any(|j| {
-                i != j
-                    && (self.rivals[i].x - self.rivals[j].x).abs() < half_w
-                    && (self.rivals[i].y - self.rivals[j].y).abs()
-                        < body_h(&self.rivals[i]).max(body_h(&self.rivals[j]))
-            });
-            if overlaps {
-                let (ox, oy) = prev[i];
-                self.rivals[i].x = ox;
-                self.rivals[i].y = oy;
-                self.rivals[i].cut = 0.0;
-            }
+        let overlapping: Vec<usize> = (0..self.rivals.len())
+            .filter(|&i| {
+                self.rivals.iter().enumerate().any(|(j, rj)| {
+                    i != j
+                        && (self.rivals[i].x - rj.x).abs() < half_w
+                        && (self.rivals[i].y - rj.y).abs()
+                            < body_h(&self.rivals[i]).max(body_h(rj))
+                })
+            })
+            .collect();
+        for &i in &overlapping {
+            let (ox, oy) = prev[i];
+            let ri = &mut self.rivals[i];
+            ri.x = ox;
+            ri.y = oy;
+            ri.cut = 0.0;
         }
         // Traffic AI: match speed of the vehicle just ahead (near lane).
         for i in 0..self.rivals.len() {
@@ -511,12 +514,12 @@ fn draw_world(s: &mut Screen, g: &Game, t: f32) {
 
     // Road edge rails (white), dashed by the scroll. The world moves DOWN
     // the screen as scroll grows, so the phase is (y - scroll).
-    let scr = g.scroll as i32;
+    let scr = g.scroll;
     for y in 0..H as i32 {
         let phase = ((y - scr) % 16 + 16) % 16;
         if phase < 10 {
-            s.set(ROAD_X0 as i32 + 1, y as i32, WHITE);
-            s.set(ROAD_X1 as i32 - 2, y as i32, WHITE);
+            s.set(ROAD_X0 as i32 + 1, y, WHITE);
+            s.set(ROAD_X1 as i32 - 2, y, WHITE);
         }
     }
     // Three dashed lane dividers.
@@ -524,7 +527,7 @@ fn draw_world(s: &mut Screen, g: &Game, t: f32) {
         for y in 0..H as i32 {
             let phase = ((y - scr) % 32 + 32) % 32;
             if phase < 18 {
-                s.set(lx as i32, y as i32, WHITE);
+                s.set(lx, y, WHITE);
             }
         }
     }
@@ -664,11 +667,10 @@ fn main() {
         let dt = 1.0 / 60.0;
         t += dt;
         blink_t += dt;
-        if let Some(secs) = quit_after {
-            if t > secs {
+        if let Some(secs) = quit_after
+            && t > secs {
                 break;
             }
-        }
 
         let left = window.is_key_down(Key::Left) || window.is_key_down(Key::A);
         let right = window.is_key_down(Key::Right) || window.is_key_down(Key::D);
@@ -723,7 +725,7 @@ mod tests {
         base.speed = 0.0;
         let mut s0 = Screen::new();
         draw_world(&mut s0, &base, 0.0);
-        let lx = (LANES[1] - 8) as i32;
+        let lx = LANES[1] - 8;
         // Measure dash STARTS (white run onsets) below the 22px HUD strip,
         // where the pattern is unobscured.
         let first_onset = |s: &Screen| -> i32 {

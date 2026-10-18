@@ -22,10 +22,10 @@ frames and asserts the outcome, e.g. the existing `rivals_change_lanes`
 test. Then:
 
 ```sh
-cargo test --release
+cargo clippy --release --all-targets && cargo test --release
 ```
 
-must pass. If your change affects difficulty, name the dials you touched
+must pass with zero warnings. If your change affects difficulty, name the dials you touched
 (`cut` frequency/speed, spawn rate, `diff` ramp) in the PR description so
 the change is bisectable.
 

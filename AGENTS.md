@@ -14,8 +14,12 @@ the answer is always yes. Commit early, commit often, push every commit.
 
 - Write real commit messages (imperative mood, say *why*, not just *what*).
 - Never leave work uncommitted at the end of a turn.
-- Never push broken builds: `cargo build --release` and `cargo test --release`
-  must pass before you push.
+- Never push broken builds. Before every push, all three gates must pass:
+  1. `cargo build --release` — **zero warnings** (note: incremental
+     builds suppress repeat warnings; use `touch src/main.rs` first if
+     unsure)
+  2. `cargo clippy --release --all-targets` — zero warnings
+  3. `cargo test --release` — all tests green
 - Force pushes are the one exception: never `--force` without an explicit
   human instruction.
 
