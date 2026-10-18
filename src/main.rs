@@ -490,10 +490,11 @@ fn draw_world(s: &mut Screen, g: &Game, t: f32) {
     // Road surface: the original drew the road as a solid light band.
     s.rect(ROAD_X0 as i32, 0, (ROAD_X1 - ROAD_X0) as i32, H as i32, GREY);
 
-    // Road edge rails (white), dashed by the scroll.
+    // Road edge rails (white), dashed by the scroll. The world moves DOWN
+    // the screen as scroll grows, so the phase is (y - scroll).
     let scr = g.scroll as i32;
     for y in 0..H as i32 {
-        let phase = ((y + scr) % 16 + 16) % 16;
+        let phase = ((y - scr) % 16 + 16) % 16;
         if phase < 10 {
             s.set(ROAD_X0 as i32 + 1, y as i32, WHITE);
             s.set(ROAD_X1 as i32 - 2, y as i32, WHITE);
@@ -502,7 +503,7 @@ fn draw_world(s: &mut Screen, g: &Game, t: f32) {
     // Three dashed lane dividers.
     for &lx in &[LANES[1] - 8, LANES[2] - 8, LANES[3] - 8] {
         for y in 0..H as i32 {
-            let phase = ((y + scr) % 32 + 32) % 32;
+            let phase = ((y - scr) % 32 + 32) % 32;
             if phase < 18 {
                 s.set(lx as i32, y as i32, WHITE);
             }
@@ -694,6 +695,41 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Lane markings must move DOWN the screen as the world scrolls forward
+    /// (a sign error made them crawl upward).
+    #[test]
+    fn road_markings_scroll_downward() {
+        let mut base = Game::new(0);
+        base.speed = 0.0;
+        let mut s0 = Screen::new();
+        draw_world(&mut s0, &base, 0.0);
+        let lx = (LANES[1] - 8) as i32;
+        // Measure dash STARTS (white run onsets) below the 22px HUD strip,
+        // where the pattern is unobscured.
+        let first_onset = |s: &Screen| -> i32 {
+            for y in 40..H as i32 - 1 {
+                let here = s.px[y as usize * W + lx as usize] == WHITE;
+                let above = s.px[(y - 1) as usize * W + lx as usize] == WHITE;
+                if here && !above {
+                    return y;
+                }
+            }
+            -1
+        };
+        let y0 = first_onset(&s0);
+        assert!(y0 > 0, "no lane dash onset found at scroll 0");
+        base.scroll = 8; // world advances 8 px => dashes shift DOWN 8 px
+        let mut s1 = Screen::new();
+        draw_world(&mut s1, &base, 0.0);
+        let y1 = first_onset(&s1);
+        assert_eq!(
+            (y1 - y0 + 32) % 32,
+            8,
+            "dashes moved up instead of down (onset {} -> {})",
+            y0, y1
+        );
+    }
 
     /// Score must tick up continuously, not sit frozen (integer-truncation bug).
     #[test]
