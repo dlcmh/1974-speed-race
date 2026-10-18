@@ -306,6 +306,7 @@ struct Game {
     rivals: Vec<Rival>,
     spawn_timer: f32,
     score: u32,
+    dist: u32, // raw distance travelled in pixels; score = dist / 5
     hi: u32,
     time_left: f32,
     crashed: bool,
@@ -322,6 +323,7 @@ impl Game {
             rivals: Vec::new(),
             spawn_timer: 0.0,
             score: 0,
+            dist: 0,
             hi,
             time_left: GAME_SECONDS,
             crashed: false,
@@ -392,7 +394,8 @@ impl Game {
         let v = 70.0 + self.speed * 290.0;
         let delta = (v * dt) as i32;
         self.scroll += delta;
-        self.score += (delta / 5) as u32;
+        self.dist = self.dist.wrapping_add(delta as u32);
+        self.score = self.dist / 5;
 
         // Rivals are slower than the player, so they come toward us. Cars
         // (not trucks) periodically cut toward the player's lane.
@@ -691,6 +694,24 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Score must tick up continuously, not sit frozen (integer-truncation bug).
+    #[test]
+    fn score_ticks_every_second() {
+        let mut g = Game::new(0);
+        let mut last = 0u32;
+        for f in 0..1800 {
+            g.step(false, false, true, false, 1.0 / 60.0);
+            if (f + 1) % 180 == 0 {
+                assert!(
+                    g.score > last,
+                    "score frozen at {} for over 3 seconds (frame {})",
+                    last, f
+                );
+                last = g.score;
+            }
+        }
+    }
 
     /// Rivals must not stay welded to their spawn lane.
     #[test]
